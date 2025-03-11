@@ -1,8 +1,12 @@
 from .pick_cube import solve as solvePickCube
+from .pick_larger_cube import solve as solvePickLargerCube
+from .pick_smaller_cube import solve as solvePickSmallerCube
 from .stack_cube import solve as solveStackCube
 from .peg_insertion_side import solve as solvePegInsertionSide
 from .plug_charger import solve as solvePlugCharger
 from .push_cube import solve as solvePushCube
+from .push_larger_cube import solve as solvePushLargerCube
+from .push_smaller_cube import solve as solvePushSmallerCube
 from .pull_cube_tool import solve as solvePullCubeTool
 from .lift_peg_upright import solve as solveLiftPegUpright
 from .pull_cube import solve as solvePullCube

@@ -9,14 +9,18 @@ from tqdm import tqdm
 import os.path as osp
 from mani_skill.utils.wrappers.record import RecordEpisode
 from mani_skill.trajectory.merge_trajectory import merge_trajectories
-from mani_skill.examples.motionplanning.panda.solutions import solvePushCube, solvePickCube, solveStackCube, solvePegInsertionSide, solvePlugCharger, solvePullCubeTool, solveLiftPegUpright, solvePullCube, solveDrawTriangle
+from mani_skill.examples.motionplanning.panda.solutions import solvePushCube, solvePushLargerCube, solvePushSmallerCube, solvePickCube, solvePickLargerCube, solvePickSmallerCube, solveStackCube, solvePegInsertionSide, solvePlugCharger, solvePullCubeTool, solveLiftPegUpright, solvePullCube #, solveDrawTriangle
 MP_SOLUTIONS = {
-    "DrawTriangle-v1": solveDrawTriangle,
+    # "DrawTriangle-v1": solveDrawTriangle,
     "PickCube-v1": solvePickCube,
+    "PickLargerCube-v1": solvePickLargerCube,
+    "PickSmallerCube-v1": solvePickSmallerCube,
     "StackCube-v1": solveStackCube,
     "PegInsertionSide-v1": solvePegInsertionSide,
     "PlugCharger-v1": solvePlugCharger,
     "PushCube-v1": solvePushCube,
+    "PushLargerCube-v1": solvePushLargerCube,
+    "PushSmallerCube-v1": solvePushSmallerCube,
     "PullCubeTool-v1": solvePullCubeTool,
     "LiftPegUpright-v1": solveLiftPegUpright,
     "PullCube-v1": solvePullCube
@@ -68,7 +72,7 @@ def _main(args, proc_id: int = 0, start_seed: int = 0) -> str:
         source_type="motionplanning",
         source_desc="official motion planning solution from ManiSkill contributors",
         video_fps=30,
-        record_reward=False,
+        record_reward=True,
         save_on_reset=False
     )
     output_h5_path = env._h5_file.filename

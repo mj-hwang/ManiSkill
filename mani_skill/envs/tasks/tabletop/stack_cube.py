@@ -90,6 +90,7 @@ class StackCubeEnv(BaseEnv):
             radius = torch.linalg.norm(torch.tensor([0.02, 0.02])) + 0.001
             cubeA_xy = xy + sampler.sample(radius, 100)
             cubeB_xy = xy + sampler.sample(radius, 100, verbose=False)
+            breakpoint()
 
             xyz[:, :2] = cubeA_xy
             qs = randomization.random_quaternions(
