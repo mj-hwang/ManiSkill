@@ -10,3 +10,7 @@ from .push_smaller_cube import solve as solvePushSmallerCube
 from .pull_cube_tool import solve as solvePullCubeTool
 from .lift_peg_upright import solve as solveLiftPegUpright
 from .pull_cube import solve as solvePullCube
+from .pull_larger_cube import solve as solvePullLargerCube
+from .pull_smaller_cube import solve as solvePullSmallerCube
+from .place_larger_cube import solve as solvePlaceLargerCube
+from .place_smaller_cube import solve as solvePlaceSmallerCube

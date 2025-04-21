@@ -8,6 +8,8 @@ from .pick_single_ycb import PickSingleYCBEnv
 from .pick_smaller_cube import PickSmallerCubeEnv
 from .plug_charger import PlugChargerEnv
 from .pull_cube import PullCubeEnv
+from .pull_larger_cube import PullLargerCubeEnv
+from .pull_smaller_cube import PullSmallerCubeEnv
 from .push_cube import PushCubeEnv
 from .push_larger_cube import PushLargerCubeEnv
 from .push_smaller_cube import PushSmallerCubeEnv
@@ -20,3 +22,5 @@ from .place_sphere import PlaceSphereEnv
 from .roll_ball import RollBallEnv
 from .push_t import PushTEnv
 from .pull_cube_tool import PullCubeToolEnv
+from .place_larger_cube import PlaceLargerCubeEnv
+from .place_smaller_cube import PlaceSmallerCubeEnv

@@ -16,7 +16,8 @@ from mani_skill.utils.scene_builder.table import TableSceneBuilder
 from mani_skill.utils.structs.pose import Pose
 
 
-@register_env("PushLargerCube-v1", max_episode_steps=50)
+@register_env("PushLargerCube-v1", max_episode_steps=150)
+@register_env("PushLargerCubeSwapped-v1", max_episode_steps=150, larger_cube_color="red")
 class PushLargerCubeEnv(BaseEnv):
     """
     **Task Description:**
@@ -34,21 +35,25 @@ class PushLargerCubeEnv(BaseEnv):
     SUPPORTED_ROBOTS = ["panda", "fetch"]
     agent: Union[Panda, Fetch]
     goal_site_x = 0.2
-    goal_error_threshold = 0.03
+    goal_error_threshold = 0.04
     larger_cube_half_size = 0.025
     smaller_cube_half_size = 0.015
 
     def __init__(
-        self, *args, robot_uids="panda", robot_init_qpos_noise=0.02, blue_is_larger=True, **kwargs
+        self, *args, robot_uids="panda", robot_init_qpos_noise=0.02, larger_cube_color="blue", **kwargs
     ):
         self.robot_init_qpos_noise = robot_init_qpos_noise
-        self.blue_is_larger = blue_is_larger
+        self.larger_cube_color = larger_cube_color
         super().__init__(*args, robot_uids=robot_uids, **kwargs)
 
     @property
     def _default_sensor_configs(self):
         pose = sapien_utils.look_at(eye=[0.3, 0, 0.6], target=[-0.1, 0, 0.1])
         return [CameraConfig("base_camera", pose, 128, 128, np.pi / 2, 0.01, 100)]
+    # @property
+    # def _default_sensor_configs(self):
+    #     pose = sapien_utils.look_at([0.6, 0.7, 0.6], [0.0, 0.0, 0.35])
+    #     return [CameraConfig("base_camera", pose, 250, 250, 1, 0.01, 100)]
 
     @property
     def _default_human_render_camera_configs(self):
@@ -63,8 +68,12 @@ class PushLargerCubeEnv(BaseEnv):
             env=self, robot_init_qpos_noise=self.robot_init_qpos_noise
         )
         self.table_scene.build()
-        colors = ([0, 0, 1, 1], [1, 0, 0, 1])
-        if not self.blue_is_larger:
+        if self.larger_cube_color == "red":
+            colors = [(1, 0, 0, 1), (0, 0, 1, 1)]
+        elif self.larger_cube_color == "blue":
+            colors = [(0, 0, 1, 1), (1, 0, 0, 1)]
+        else: # random
+            colors = [(1, 0, 0, 1), (0, 0, 1, 1)]
             random.shuffle(colors)
         larger_cube_color, smaller_cube_color = colors
             
@@ -105,11 +114,12 @@ class PushLargerCubeEnv(BaseEnv):
             xy[:, 0] = xy[:, 0] * 0.2 - 0.1  # Scale x to [-0.1, 0.1]
             xy[:, 1] = xy[:, 1] * (-0.1)     # Scale y to [-0.1, 0.0]
             
-            region = [[-0.015, -0.2], [0.015, 0.2]]
+            region = [[-0.015, -0.15], [0.005, 0.15]]
             sampler = randomization.UniformPlacementSampler(
                 bounds=region, batch_size=b, device=self.device
             )
-            radius = torch.linalg.norm(torch.tensor([0.02, 0.02])) + 0.001
+            # radius = torch.linalg.norm(torch.tensor([0.02, 0.02])) + 0.001
+            radius = 0.06
             larger_cube_xy = xy + sampler.sample(radius, 100)
             smaller_cube_xy = xy + sampler.sample(radius, 100, verbose=False)
             q = [1, 0, 0, 0]
@@ -160,35 +170,6 @@ class PushLargerCubeEnv(BaseEnv):
     #     )
     #     return obs
 
-    def compute_dense_reward(self, obs: Any, action: torch.Tensor, info: Dict):
-        tcp_to_obj_dist = torch.linalg.norm(
-            self.larger_cube.pose.p - self.agent.tcp.pose.p, axis=1
-        )
-        reaching_reward = 1 - torch.tanh(5 * tcp_to_obj_dist)
-        reward = reaching_reward
-
-        is_grasped = info["is_grasped"]
-        reward += is_grasped
-
-        obj_to_goal_dist = torch.linalg.norm(
-            self.goal_site.pose.p - self.larger_cube.pose.p, axis=1
-        )
-        place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
-        reward += place_reward * is_grasped
-
-        qvel_without_gripper = self.agent.robot.get_qvel()
-        if self.robot_uids == "xarm6_robotiq":
-            qvel_without_gripper = qvel_without_gripper[..., :-6]
-        elif self.robot_uids == "panda":
-            qvel_without_gripper = qvel_without_gripper[..., :-2]
-        static_reward = 1 - torch.tanh(
-            5 * torch.linalg.norm(qvel_without_gripper, axis=1)
-        )
-        reward += static_reward * info["is_obj_placed"]
-
-        reward[info["success"]] = 5
-        return reward
-    
     def compute_dense_reward(self, obs: Any, action: torch.Tensor, info: Dict):
         # We also create a pose marking where the robot should push the cube from that is easiest (pushing from behind the cube)
         tcp_push_pose = Pose.create_from_pq(

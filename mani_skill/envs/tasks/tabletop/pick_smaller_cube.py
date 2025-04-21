@@ -16,7 +16,8 @@ from mani_skill.utils.scene_builder.table import TableSceneBuilder
 from mani_skill.utils.structs.pose import Pose
 
 
-@register_env("PickSmallerCube-v1", max_episode_steps=50)
+@register_env("PickSmallerCube-v1", max_episode_steps=150)
+@register_env("PickSmallerCubeSwapped-v1", max_episode_steps=150, larger_cube_color="blue")
 class PickSmallerCubeEnv(BaseEnv):
     """
     **Task Description:**
@@ -41,16 +42,20 @@ class PickSmallerCubeEnv(BaseEnv):
     smaller_cube_half_size = 0.015
 
     def __init__(
-        self, *args, robot_uids="panda", robot_init_qpos_noise=0.02, red_is_larger=True, **kwargs
+        self, *args, robot_uids="panda", robot_init_qpos_noise=0.02, larger_cube_color="red", **kwargs
     ):
         self.robot_init_qpos_noise = robot_init_qpos_noise
-        self.red_is_larger = red_is_larger
+        self.larger_cube_color = larger_cube_color
         super().__init__(*args, robot_uids=robot_uids, **kwargs)
 
     @property
     def _default_sensor_configs(self):
         pose = sapien_utils.look_at(eye=[0.3, 0, 0.6], target=[-0.1, 0, 0.1])
         return [CameraConfig("base_camera", pose, 128, 128, np.pi / 2, 0.01, 100)]
+    # @property
+    # def _default_sensor_configs(self):
+    #     pose = sapien_utils.look_at([0.6, 0.7, 0.6], [0.0, 0.0, 0.35])
+    #     return [CameraConfig("base_camera", pose, 250, 250, 1, 0.01, 100)]
 
     @property
     def _default_human_render_camera_configs(self):
@@ -65,8 +70,12 @@ class PickSmallerCubeEnv(BaseEnv):
             env=self, robot_init_qpos_noise=self.robot_init_qpos_noise
         )
         self.table_scene.build()
-        colors = ([1, 0, 0, 1], [0, 0, 1, 1])
-        if not self.red_is_larger:
+        if self.larger_cube_color == "red":
+            colors = [(1, 0, 0, 1), (0, 0, 1, 1)]
+        elif self.larger_cube_color == "blue":
+            colors = [(0, 0, 1, 1), (1, 0, 0, 1)]
+        else: # random
+            colors = [(1, 0, 0, 1), (0, 0, 1, 1)]
             random.shuffle(colors)
         larger_cube_color, smaller_cube_color = colors
             
@@ -142,7 +151,7 @@ class PickSmallerCubeEnv(BaseEnv):
         is_grasped = self.agent.is_grasping(self.larger_cube)
         is_robot_static = self.agent.is_static(0.2)
         return {
-            "success": is_obj_placed & is_robot_static,
+            "success": is_obj_placed,
             "is_obj_placed": is_obj_placed,
             "is_robot_static": is_robot_static,
             "is_grasped": is_grasped,

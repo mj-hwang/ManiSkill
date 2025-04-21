@@ -9,22 +9,33 @@ from tqdm import tqdm
 import os.path as osp
 from mani_skill.utils.wrappers.record import RecordEpisode
 from mani_skill.trajectory.merge_trajectory import merge_trajectories
-from mani_skill.examples.motionplanning.panda.solutions import solvePushCube, solvePushLargerCube, solvePushSmallerCube, solvePickCube, solvePickLargerCube, solvePickSmallerCube, solveStackCube, solvePegInsertionSide, solvePlugCharger, solvePullCubeTool, solveLiftPegUpright, solvePullCube #, solveDrawTriangle
+from mani_skill.examples.motionplanning.panda.solutions import solvePushCube, solvePushLargerCube, solvePushSmallerCube, solvePickCube, solvePickLargerCube, solvePickSmallerCube, solveStackCube, solvePegInsertionSide, solvePlugCharger, solvePullCubeTool, solveLiftPegUpright, solvePullCube, solvePullLargerCube, solvePullSmallerCube, solvePlaceLargerCube, solvePlaceSmallerCube #, solveDrawTriangle
 MP_SOLUTIONS = {
     # "DrawTriangle-v1": solveDrawTriangle,
     "PickCube-v1": solvePickCube,
-    "PickLargerCube-v1": solvePickLargerCube,
-    "PickSmallerCube-v1": solvePickSmallerCube,
     "StackCube-v1": solveStackCube,
     "PegInsertionSide-v1": solvePegInsertionSide,
     "PlugCharger-v1": solvePlugCharger,
     "PushCube-v1": solvePushCube,
-    "PushLargerCube-v1": solvePushLargerCube,
-    "PushSmallerCube-v1": solvePushSmallerCube,
     "PullCubeTool-v1": solvePullCubeTool,
     "LiftPegUpright-v1": solveLiftPegUpright,
-    "PullCube-v1": solvePullCube
-
+    "PullCube-v1": solvePullCube,
+    "PickLargerCube-v1": solvePickLargerCube,
+    "PickSmallerCube-v1": solvePickSmallerCube,
+    "PushLargerCube-v1": solvePushLargerCube,
+    "PushSmallerCube-v1": solvePushSmallerCube,
+    "PullLargerCube-v1": solvePullLargerCube,
+    "PullSmallerCube-v1": solvePullSmallerCube,
+    "PlaceLargerCube-v1": solvePlaceLargerCube,
+    "PlaceSmallerCube-v1": solvePlaceSmallerCube,
+    "PickLargerCubeSwapped-v1": solvePickLargerCube,
+    "PickSmallerCubeSwapped-v1": solvePickSmallerCube,
+    "PushLargerCubeSwapped-v1": solvePushLargerCube,
+    "PushSmallerCubeSwapped-v1": solvePushSmallerCube,
+    "PullLargerCubeSwapped-v1": solvePullLargerCube,
+    "PullSmallerCubeSwapped-v1": solvePullSmallerCube,
+    "PlaceLargerCubeSwapped-v1": solvePlaceLargerCube,
+    "PlaceSmallerCubeSwapped-v1": solvePlaceSmallerCube,
 }
 def parse_args(args=None):
     parser = argparse.ArgumentParser()
@@ -41,10 +52,12 @@ def parse_args(args=None):
     parser.add_argument("--shader", default="default", type=str, help="Change shader used for rendering. Default is 'default' which is very fast. Can also be 'rt' for ray tracing and generating photo-realistic renders. Can also be 'rt-fast' for a faster but lower quality ray-traced renderer")
     parser.add_argument("--record-dir", type=str, default="demos", help="where to save the recorded trajectories")
     parser.add_argument("--num-procs", type=int, default=1, help="Number of processes to use to help parallelize the trajectory replay process. This uses CPU multiprocessing and only works with the CPU simulation backend at the moment.")
+    parser.add_argument("--start-seed", type=int, default=0, help="Seed")
     return parser.parse_args()
 
-def _main(args, proc_id: int = 0, start_seed: int = 0) -> str:
+def _main(args, proc_id: int = 0) -> str:
     env_id = args.env_id
+    start_seed = args.start_seed
     env = gym.make(
         env_id,
         obs_mode=args.obs_mode,
@@ -115,8 +128,8 @@ def _main(args, proc_id: int = 0, start_seed: int = 0) -> str:
                     success_rate=np.mean(successes),
                     failed_motion_plan_rate=failed_motion_plans / (seed + 1),
                     avg_episode_length=np.mean(solution_episode_lengths),
-                    max_episode_length=np.max(solution_episode_lengths),
-                    # min_episode_length=np.min(solution_episode_lengths)
+                    # max_episode_length=np.max(solution_episode_lengths),
+                    min_episode_length=np.min(solution_episode_lengths),
                 )
             )
             seed += 1

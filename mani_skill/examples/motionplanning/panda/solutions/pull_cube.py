@@ -1,11 +1,11 @@
 import numpy as np
 import sapien
 
-from mani_skill.envs.tasks import PushCubeEnv
+from mani_skill.envs.tasks import PullCubeEnv
 from mani_skill.examples.motionplanning.panda.motionplanner import \
     PandaArmMotionPlanningSolver
 
-def solve(env: PushCubeEnv, seed=None, debug=False, vis=False):
+def solve(env: PullCubeEnv, seed=None, debug=False, vis=False):
     env.reset(seed=seed)
     planner = PandaArmMotionPlanningSolver(
         env,

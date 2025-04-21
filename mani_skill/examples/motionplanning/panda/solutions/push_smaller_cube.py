@@ -19,7 +19,7 @@ def solve(env: PushSmallerCubeEnv, seed=None, debug=False, vis=False):
     FINGER_LENGTH = 0.025
     env = env.unwrapped
     planner.close_gripper()
-    p_reach = env.smaller_cube.pose.sp.p + np.array([-0.045, 0, 0])
+    p_reach = env.smaller_cube.pose.sp.p + np.array([-0.05, 0, 0])
     reach_pose = sapien.Pose(p=p_reach, q=env.agent.tcp.pose.sp.q)
     planner.move_to_pose_with_screw(reach_pose)
 

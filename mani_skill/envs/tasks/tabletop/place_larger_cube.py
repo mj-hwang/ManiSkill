@@ -16,9 +16,9 @@ from mani_skill.utils.scene_builder.table import TableSceneBuilder
 from mani_skill.utils.structs.pose import Pose
 
 
-@register_env("PickLargerCube-v1", max_episode_steps=150)
-@register_env("PickLargerCubeSwapped-v1", max_episode_steps=150, larger_cube_color="blue")
-class PickLargerCubeEnv(BaseEnv):
+@register_env("PlaceLargerCube-v1", max_episode_steps=150)
+@register_env("PlaceLargerCubeSwapped-v1", max_episode_steps=150, larger_cube_color="red")
+class PlaceLargerCubeEnv(BaseEnv):
     """
     **Task Description:**
     The goal is to pick up a larger cube out of two cubes (red & blue).
@@ -40,9 +40,23 @@ class PickLargerCubeEnv(BaseEnv):
     goal_thresh = 0.03
     larger_cube_half_size = 0.025
     smaller_cube_half_size = 0.015
+    bin_x = 0.18
+
+    inner_side_half_len = 0.03  # side length of the bin's inner square
+    short_side_half_size = 0.003  # length of the shortest edge of the block
+    block_half_size = [
+        short_side_half_size,
+        2 * short_side_half_size + inner_side_half_len,
+        2 * short_side_half_size + inner_side_half_len,
+    ]  # The bottom block of the bin, which is larger: The list represents the half length of the block along the [x, y, z] axis respectively.
+    edge_block_half_size = [
+        short_side_half_size,
+        2 * short_side_half_size + inner_side_half_len,
+        2 * short_side_half_size,
+    ]  # The edge block of the bin, which is smaller. The representations are similar to the above one
 
     def __init__(
-        self, *args, robot_uids="panda", robot_init_qpos_noise=0.02, larger_cube_color="red", **kwargs
+        self, *args, robot_uids="panda", robot_init_qpos_noise=0.02, larger_cube_color="blue", **kwargs
     ):
         self.robot_init_qpos_noise = robot_init_qpos_noise
         self.larger_cube_color = larger_cube_color
@@ -52,15 +66,49 @@ class PickLargerCubeEnv(BaseEnv):
     def _default_sensor_configs(self):
         pose = sapien_utils.look_at(eye=[0.3, 0, 0.6], target=[-0.1, 0, 0.1])
         return [CameraConfig("base_camera", pose, 128, 128, np.pi / 2, 0.01, 100)]
-    # @property
-    # def _default_sensor_configs(self):
-    #     pose = sapien_utils.look_at([0.6, 0.7, 0.6], [0.0, 0.0, 0.35])
-    #     return [CameraConfig("base_camera", pose, 250, 250, 1, 0.01, 100)]
 
     @property
     def _default_human_render_camera_configs(self):
         pose = sapien_utils.look_at([0.6, 0.7, 0.6], [0.0, 0.0, 0.35])
         return CameraConfig("render_camera", pose, 512, 512, 1, 0.01, 100)
+    
+    def _build_bin(self, radius):
+        builder = self.scene.create_actor_builder()
+
+        # init the locations of the basic blocks
+        dx = self.block_half_size[1] - self.block_half_size[0]
+        dy = self.block_half_size[1] - self.block_half_size[0]
+        dz = self.edge_block_half_size[2] + self.block_half_size[0]
+
+        # build the bin bottom and edge blocks
+        poses = [
+            sapien.Pose([0, 0, 0]),
+            sapien.Pose([-dx, 0, dz]),
+            sapien.Pose([dx, 0, dz]),
+            sapien.Pose([0, -dy, dz]),
+            sapien.Pose([0, dy, dz]),
+        ]
+        half_sizes = [
+            [self.block_half_size[1], self.block_half_size[2], self.block_half_size[0]],
+            self.edge_block_half_size,
+            self.edge_block_half_size,
+            [
+                self.edge_block_half_size[1],
+                self.edge_block_half_size[0],
+                self.edge_block_half_size[2],
+            ],
+            [
+                self.edge_block_half_size[1],
+                self.edge_block_half_size[0],
+                self.edge_block_half_size[2],
+            ],
+        ]
+        for pose, half_size in zip(poses, half_sizes):
+            builder.add_box_collision(pose, half_size)
+            builder.add_box_visual(pose=pose, half_size=half_size, material=sapien.render.RenderMaterial(base_color=[0, 1, 0, 1]))
+
+        # build the kinematic bin
+        return builder.build_kinematic(name="bin")
 
     def _load_agent(self, options: dict):
         super()._load_agent(options, sapien.Pose(p=[-0.615, 0, 0]))
@@ -93,15 +141,8 @@ class PickLargerCubeEnv(BaseEnv):
             name="smaller_cube",
             initial_pose=sapien.Pose(p=[1, 0, 0.1]),
         )
-        self.goal_site = actors.build_sphere(
-            self.scene,
-            radius=self.goal_thresh,
-            color=[0, 1, 0, 1],
-            name="goal_site",
-            body_type="kinematic",
-            add_collision=False,
-            initial_pose=sapien.Pose(),
-        )
+        # load the bin
+        self.bin = self._build_bin(self.larger_cube_half_size)
         # self._hidden_objects.append(self.goal_site)
 
     def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
@@ -112,7 +153,7 @@ class PickLargerCubeEnv(BaseEnv):
             xyz = torch.zeros((b, 3))
             xyz[:, 2] = 0.02
             xy = torch.rand((b, 2)) * 0.2 - 0.1
-            region = [[-0.1, -0.2], [0.1, 0.2]]
+            region = [[-0.1, -0.2], [0.05, 0.2]]
             sampler = randomization.UniformPlacementSampler(
                 bounds=region, batch_size=b, device=self.device
             )
@@ -138,14 +179,18 @@ class PickLargerCubeEnv(BaseEnv):
             )
             self.smaller_cube.set_pose(Pose.create_from_pq(p=xyz, q=qs))
 
-            goal_xyz = torch.zeros((b, 3))
-            goal_xyz[:, :2] = torch.rand((b, 2)) * 0.2 - 0.1
-            goal_xyz[:, 2] = torch.rand((b)) * 0.05 + 0.25
-            self.goal_site.set_pose(Pose.create_from_pq(goal_xyz))
+            # set a little bit above 0 so the target is sitting on the table
+            pos = torch.zeros((b, 3))
+            pos[:, 0] = self.bin_x
+            pos[:, 2] = self.block_half_size[0]  # on the table
+            q = [1, 0, 0, 0]
+            bin_pose = Pose.create_from_pq(p=pos, q=q)
+            self.bin.set_pose(bin_pose)
+
 
     def evaluate(self):
         is_obj_placed = (
-            torch.linalg.norm(self.goal_site.pose.p - self.larger_cube.pose.p, axis=1)
+            torch.linalg.norm(self.bin.pose.p - self.larger_cube.pose.p, axis=1)
             <= self.goal_thresh
         )
         is_grasped = self.agent.is_grasping(self.larger_cube)
@@ -175,7 +220,7 @@ class PickLargerCubeEnv(BaseEnv):
         reward += is_grasped
 
         obj_to_goal_dist = torch.linalg.norm(
-            self.goal_site.pose.p - self.larger_cube.pose.p, axis=1
+            self.bin.pose.p - self.larger_cube.pose.p, axis=1
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
         reward += place_reward * is_grasped

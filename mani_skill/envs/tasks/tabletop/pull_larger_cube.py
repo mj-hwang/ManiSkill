@@ -16,12 +16,12 @@ from mani_skill.utils.scene_builder.table import TableSceneBuilder
 from mani_skill.utils.structs.pose import Pose
 
 
-@register_env("PushSmallerCube-v1", max_episode_steps=150)
-@register_env("PushSmallerCubeSwapped-v1", max_episode_steps=150, larger_cube_color="red")
-class PushSmallerCubeEnv(BaseEnv):
+@register_env("PullLargerCube-v1", max_episode_steps=150)
+@register_env("PullLargerCubeSwapped-v1", max_episode_steps=150, larger_cube_color="blue")
+class PullLargerCubeEnv(BaseEnv):
     """
     **Task Description:**
-    The goal is to push a smaller cube out of two cubes (red & blue) over the green line.
+    The goal is to push a larger cube out of two cubes (red & blue) over the green line.
     - if the blue_is_larger flag is set to True, the blue cube will be larger than the red cube 
 
     **Randomizations:**
@@ -34,13 +34,13 @@ class PushSmallerCubeEnv(BaseEnv):
 
     SUPPORTED_ROBOTS = ["panda", "fetch"]
     agent: Union[Panda, Fetch]
-    goal_site_x = 0.2
+    goal_site_x = -0.25
     goal_error_threshold = 0.04
     larger_cube_half_size = 0.025
     smaller_cube_half_size = 0.015
 
     def __init__(
-        self, *args, robot_uids="panda", robot_init_qpos_noise=0.02, larger_cube_color="blue", **kwargs
+        self, *args, robot_uids="panda", robot_init_qpos_noise=0.02, larger_cube_color="red", **kwargs
     ):
         self.robot_init_qpos_noise = robot_init_qpos_noise
         self.larger_cube_color = larger_cube_color
@@ -114,12 +114,12 @@ class PushSmallerCubeEnv(BaseEnv):
             xy[:, 0] = xy[:, 0] * 0.2 - 0.1  # Scale x to [-0.1, 0.1]
             xy[:, 1] = xy[:, 1] * (-0.1)     # Scale y to [-0.1, 0.0]
             
-            region = [[-0.015, -0.15], [0.005, 0.15]]
+            region = [[0.0, -0.15], [0.015, 0.15]]
             sampler = randomization.UniformPlacementSampler(
                 bounds=region, batch_size=b, device=self.device
             )
             # radius = torch.linalg.norm(torch.tensor([0.02, 0.02])) + 0.001
-            radius = 0.06
+            radius = 0.05
             larger_cube_xy = xy + sampler.sample(radius, 100)
             smaller_cube_xy = xy + sampler.sample(radius, 100, verbose=False)
             q = [1, 0, 0, 0]
@@ -155,13 +155,13 @@ class PushSmallerCubeEnv(BaseEnv):
         # success is achieved when the cube's xy position on the table is within the
         # goal region's area (a circle centered at the goal region's xy position) and
         # the cube is still on the surface
-        is_obj_pushed = (
-            torch.abs(self.smaller_cube.pose.p[..., 0] - self.goal_site.pose.p[..., 0])
+        is_obj_pulled = (
+            torch.abs(self.larger_cube.pose.p[..., 0] - self.goal_site.pose.p[..., 0])
             < self.goal_error_threshold
-        ) & (self.smaller_cube.pose.p[..., 2] < self.smaller_cube_half_size + 5e-3)
+        ) & (self.larger_cube.pose.p[..., 2] < self.larger_cube_half_size + 5e-3)
 
         return {
-            "success": is_obj_pushed,
+            "success": is_obj_pulled,
         }
 
     # def _get_obs_extra(self, info: Dict):
@@ -169,23 +169,23 @@ class PushSmallerCubeEnv(BaseEnv):
     #         tcp_pose=self.agent.tcp.pose.raw_pose,
     #     )
     #     return obs
-
+    
     def compute_dense_reward(self, obs: Any, action: torch.Tensor, info: Dict):
         # We also create a pose marking where the robot should push the cube from that is easiest (pushing from behind the cube)
-        tcp_push_pose = Pose.create_from_pq(
-            p=self.smaller_cube.pose.p
-            + torch.tensor([-self.smaller_cube_half_size - 0.005, 0, 0], device=self.device)
+        tcp_pull_pose = Pose.create_from_pq(
+            p=self.larger_cube.pose.p
+            + torch.tensor([self.larger_cube_half_size + 2 * 0.005, 0, 0], device=self.device)
         )
-        tcp_to_push_pose = tcp_push_pose.p - self.agent.tcp.pose.p
-        tcp_to_push_pose_dist = torch.linalg.norm(tcp_to_push_pose, axis=1)
-        reaching_reward = 1 - torch.tanh(5 * tcp_to_push_pose_dist)
+        tcp_to_pull_pose = tcp_pull_pose.p - self.agent.tcp.pose.p
+        tcp_to_pull_pose_dist = torch.linalg.norm(tcp_to_pull_pose, axis=1)
+        reaching_reward = 1 - torch.tanh(5 * tcp_to_pull_pose_dist)
         reward = reaching_reward
 
         # compute a placement reward to encourage robot to move the cube to the center of the goal region
         # we further multiply the place_reward by a mask reached so we only add the place reward if the robot has reached the desired push pose
         # This reward design helps train RL agents faster by staging the reward out.
-        reached = tcp_to_push_pose_dist < 0.01
-        obj_to_goal_x_dist = torch.abs(self.smaller_cube.pose.p[..., 0] - self.goal_site.pose.p[..., 0]) 
+        reached = tcp_to_pull_pose_dist < 0.01
+        obj_to_goal_x_dist = torch.abs(self.larger_cube.pose.p[..., 0] - self.goal_site.pose.p[..., 0]) 
         place_reward = 1 - torch.tanh(5 * obj_to_goal_x_dist)
         reward += place_reward * reached
 
