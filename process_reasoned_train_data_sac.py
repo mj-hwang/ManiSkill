@@ -7,29 +7,48 @@ from transformers import AutoTokenizer, T5Config, T5EncoderModel
 # NOTE: Trajectory A referes to preferred trajectory.
 TASKS = [
     "pick_larger",
-    "push_larger",
-    # "place_larger",
+    # "push_larger",
+    "place_larger",
     # "pull_larger",
 ]
 
-NUM_TRAJ_PER_TASK = 500
+NUM_TRAJ_PER_TASK = 1000
+
+# DATA_PATHS = {
+#     "pick_larger": {
+#         "A": "./demos/PickLargerCube-v1/motionplanning/pick_larger_train_1000.rgb.pd_ee_delta_pose.physx_cpu.h5",
+#         "B": "./demos/PickSmallerCube-v1/motionplanning/pick_smaller_train_1000.rgb.pd_ee_delta_pose.physx_cpu.h5",
+#     },
+#     "push_larger": {
+#         "A": "./demos/PushLargerCube-v1/motionplanning/push_larger_train_1000.rgb.pd_ee_delta_pose.physx_cpu.h5",
+#         "B": "./demos/PushSmallerCube-v1/motionplanning/push_smaller_train_1000.rgb.pd_ee_delta_pose.physx_cpu.h5",
+#     },
+#     "place_larger": {
+#         "A": "./demos/PlaceLargerCube-v1/motionplanning/place_larger_train_1000.rgb.pd_ee_delta_pose.physx_cpu.h5",
+#         "B": "./demos/PlaceSmallerCube-v1/motionplanning/place_smaller_train_1000.rgb.pd_ee_delta_pose.physx_cpu.h5",
+#     },
+#     "pull_larger": {
+#         "A": "./demos/PullLargerCube-v1/motionplanning/pull_larger_train_1000.rgb.pd_ee_delta_pose.physx_cpu.h5",
+#         "B": "./demos/PullSmallerCube-v1/motionplanning/pull_smaller_train_1000.rgb.pd_ee_delta_pose.physx_cpu.h5",
+#     },
+# }
 
 DATA_PATHS = {
     "pick_larger": {
-        "A": "./demos/PickLargerCube-v1/motionplanning/pick_larger_train_1000.rgb.pd_ee_delta_pose.physx_cpu.h5",
-        "B": "./demos/PickSmallerCube-v1/motionplanning/pick_smaller_train_1000.rgb.pd_ee_delta_pose.physx_cpu.h5",
+        "A": "./examples/baselines/sac/datasets/PickLargerCube-v1/sac_policy/train.h5",
+        "B": "./examples/baselines/sac/datasets/PickSmallerCube-v1/sac_policy/train.h5",
     },
     "push_larger": {
-        "A": "./demos/PushLargerCube-v1/motionplanning/push_larger_train_1000.rgb.pd_ee_delta_pose.physx_cpu.h5",
-        "B": "./demos/PushSmallerCube-v1/motionplanning/push_smaller_train_1000.rgb.pd_ee_delta_pose.physx_cpu.h5",
+        "A": "./examples/baselines/sac/datasets/PushLargerCube-v1/sac_policy/train.h5",
+        "B": "./examples/baselines/sac/datasets/PushSmallerCube-v1/sac_policy/train.h5",
     },
     "place_larger": {
-        "A": "./demos/PlaceLargerCube-v1/motionplanning/place_larger_train_1000.rgb.pd_ee_delta_pose.physx_cpu.h5",
-        "B": "./demos/PlaceSmallerCube-v1/motionplanning/place_smaller_train_1000.rgb.pd_ee_delta_pose.physx_cpu.h5",
+        "A": "./examples/baselines/sac/datasets/PlaceLargerCube-v1/sac_policy/train.h5",
+        "B": "./examples/baselines/sac/datasets/PlaceSmallerCube-v1/sac_policy/train.h5",
     },
     "pull_larger": {
-        "A": "./demos/PullLargerCube-v1/motionplanning/pull_larger_train_1000.rgb.pd_ee_delta_pose.physx_cpu.h5",
-        "B": "./demos/PullSmallerCube-v1/motionplanning/pull_smaller_train_1000.rgb.pd_ee_delta_pose.physx_cpu.h5",
+        "A": "./examples/baselines/sac/datasets/PullLargerCube-v1/sac_policy/train.h5",
+        "B": "./examples/baselines/sac/datasets/PullSmallerCube-v1/sac_policy/train.h5",
     },
 }
 
@@ -47,10 +66,25 @@ REASON_NLS = {
     "pull_larger": "cube is larger",
 }
 
-TRAJ_LEN = 64
+TRAJ_LEN = 4
 LANG_MODEL_NAME = "google-t5/t5-small"
 
+def set_seed(seed_value):
+    """Sets a global seed for reproducibility across all libraries."""
+    random.seed(seed_value)
+    np.random.seed(seed_value)
+    torch.manual_seed(seed_value)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed_value)
+    
+    # These lines are crucial for CUDA operations to be deterministic.
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    
+    print(f"Global seed set to {seed_value} for full reproducibility.")
+
 def main():
+    set_seed(42)
     print("###### PHASE 1: processing trajectory data ######")
     obs_1 = []
     actions_1 = []
@@ -68,25 +102,21 @@ def main():
         i = 0
         num_traj = 0
         while num_traj < NUM_TRAJ_PER_TASK:
-            print(f"Trajectory Index: {i}")
-            print(f"Num Trajectories so far: {num_traj}")
             traj_len_1 = len(f1[keys_1[i]]["actions"])
             traj_len_2 = len(f2[keys_2[i]]["actions"])
             if traj_len_1 < TRAJ_LEN or traj_len_2 < TRAJ_LEN:
+                print(f"Trajectory Index: {i}")
+                print(f"Num Trajectories so far: {num_traj}")
                 print(f"detected a trajectory shorter than {TRAJ_LEN}; len_1: {traj_len_1}, len_2: {traj_len_2}")
                 i += 1
                 continue
 
             start_idx_1 = random.randint(0, traj_len_1 - TRAJ_LEN)
-            ob1 = f1[keys_1[i]]["obs"]["sensor_data"]["base_camera"]["rgb"][start_idx_1:start_idx_1 + TRAJ_LEN]
-            ob1 = np.transpose(ob1, (0, 3, 1, 2))
-            obs_1.append(ob1)
+            obs_1.append(f1[keys_1[i]]["obs"][start_idx_1:start_idx_1 + TRAJ_LEN])
             actions_1.append(f1[keys_1[i]]["actions"][start_idx_1:start_idx_1 + TRAJ_LEN])
 
             start_idx_2 = random.randint(0, traj_len_2 - TRAJ_LEN)
-            ob2 = f2[keys_2[i]]["obs"]["sensor_data"]["base_camera"]["rgb"][start_idx_2:start_idx_2 + TRAJ_LEN]
-            ob2 = np.transpose(ob2, (0, 3, 1, 2))
-            obs_2.append(ob2)
+            obs_2.append(f2[keys_2[i]]["obs"][start_idx_2:start_idx_2 + TRAJ_LEN])
             actions_2.append(f2[keys_2[i]]["actions"][start_idx_2:start_idx_2 + TRAJ_LEN])
             i += 1
             num_traj += 1
@@ -112,12 +142,12 @@ def main():
 
     print("###### PHASE 2: processing language (reason & task) data ######")
     tokenizer = AutoTokenizer.from_pretrained(LANG_MODEL_NAME)
-    t5_config = T5Config.from_pretrained(LANG_MODEL_NAME)
-    t5_config.dropout_rate = 0.0
-    lang_encoder = T5EncoderModel(t5_config)
+    lang_encoder = T5EncoderModel.from_pretrained(LANG_MODEL_NAME)
+    lang_encoder.config.dropout_rate = 0.0
+    lang_encoder.eval()
+    
     for param in lang_encoder.parameters():
         param.requires_grad = False
-    lang_encoder.eval()
 
     tokenized_reasons = tokenizer(
         [REASON_NLS[task] for task in TASKS],
@@ -134,6 +164,8 @@ def main():
     reason_embeddings = torch.repeat_interleave(reason_embeddings, NUM_TRAJ_PER_TASK, dim=0)
     reason_embeddings = reason_embeddings.cpu().numpy()
 
+    # breakpoint()
+
     tokenized_tasks = tokenizer(
         [TASK_NLS[task] for task in TASKS],
         padding=True,
@@ -146,6 +178,7 @@ def main():
     float_task_mask = task_masks.unsqueeze(-1).type_as(task_lhs)
     masked_task_lhs = task_lhs * float_task_mask
     task_embeddings = masked_task_lhs.sum(dim=1) / float_task_mask.sum(dim=1)
+    print(task_embeddings.mean(1))
     task_embeddings = torch.repeat_interleave(task_embeddings, NUM_TRAJ_PER_TASK, dim=0)
     task_embeddings = task_embeddings.cpu().numpy()
 
@@ -157,7 +190,7 @@ def main():
 
     print("###### PHASE 3: saving data ######")
     np.savez_compressed(
-        f"data_{'_'.join(TASKS)}_train_{NUM_TRAJ_PER_TASK * len(TASKS)}_updated.npz", 
+        f"data_{'_'.join(TASKS)}_train_{NUM_TRAJ_PER_TASK * len(TASKS)}_sac.npz", 
         obs_1=obs_1, 
         action_1=actions_1, 
         obs_2=obs_2, 
@@ -171,3 +204,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+ 

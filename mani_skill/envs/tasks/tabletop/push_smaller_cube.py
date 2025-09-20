@@ -16,8 +16,8 @@ from mani_skill.utils.scene_builder.table import TableSceneBuilder
 from mani_skill.utils.structs.pose import Pose
 
 
-@register_env("PushSmallerCube-v1", max_episode_steps=150)
-@register_env("PushSmallerCubeSwapped-v1", max_episode_steps=150, larger_cube_color="red")
+@register_env("PushSmallerCube-v1", max_episode_steps=50)
+@register_env("PushSmallerCubeSwapped-v1", max_episode_steps=50, larger_cube_color="red")
 class PushSmallerCubeEnv(BaseEnv):
     """
     **Task Description:**
@@ -69,13 +69,13 @@ class PushSmallerCubeEnv(BaseEnv):
         )
         self.table_scene.build()
         if self.larger_cube_color == "red":
-            colors = [(1, 0, 0, 1), (0, 0, 1, 1)]
+            self.colors = [(1, 0, 0, 1), (0, 0, 1, 1)]
         elif self.larger_cube_color == "blue":
-            colors = [(0, 0, 1, 1), (1, 0, 0, 1)]
+            self.colors = [(0, 0, 1, 1), (1, 0, 0, 1)]
         else: # random
-            colors = [(1, 0, 0, 1), (0, 0, 1, 1)]
-            random.shuffle(colors)
-        larger_cube_color, smaller_cube_color = colors
+            self.colors = [(1, 0, 0, 1), (0, 0, 1, 1)]
+            random.shuffle(self.colors)
+        larger_cube_color, smaller_cube_color = self.colors
             
         self.larger_cube = actors.build_cube(
             self.scene,
@@ -164,11 +164,42 @@ class PushSmallerCubeEnv(BaseEnv):
             "success": is_obj_pushed,
         }
 
-    # def _get_obs_extra(self, info: Dict):
-    #     obs = dict(
-    #         tcp_pose=self.agent.tcp.pose.raw_pose,
-    #     )
-    #     return obs
+    def _get_obs_extra(self, info: Dict):
+        # in reality some people hack is_grasped into observations by checking if the gripper can close fully or not
+        larger_cube_color, smaller_cube_color = self.colors
+        b = self.num_envs  # Number of environments
+
+        # Expand size and color to match the environment dimension
+        larger_cube_size = torch.full((b, 1), self.larger_cube_half_size, device=self.device)
+        smaller_cube_size = torch.full((b, 1), self.smaller_cube_half_size, device=self.device)
+        larger_cube_color = torch.tensor(larger_cube_color, device=self.device).unsqueeze(0).repeat(b, 1)
+        smaller_cube_color = torch.tensor(smaller_cube_color, device=self.device).unsqueeze(0).repeat(b, 1)
+
+        # Combine cube data into tensors
+        larger_cube_data = torch.cat(
+            [self.larger_cube.pose.raw_pose, larger_cube_size, larger_cube_color], dim=1
+        )
+        smaller_cube_data = torch.cat(
+            [self.smaller_cube.pose.raw_pose, smaller_cube_size, smaller_cube_color], dim=1
+        )
+
+        # Combine cube data into a single tensor and shuffle their order
+        cubes = torch.cat([larger_cube_data.unsqueeze(1), smaller_cube_data.unsqueeze(1)], dim=1)  # Shape: (b, 2, data_dim)
+        shuffle_mask = torch.rand(b, device=self.device) < 0.5  # Generate a boolean mask directly with 50% probability
+        cubes[shuffle_mask] = cubes[shuffle_mask][:, [1, 0]]  # Swap larger and smaller cube data for selected environments
+
+        # Reshape cubes to (b, 2 * data_dim) where data_dim is the number of features per cube
+        cubes = cubes.view(b, -1)
+
+        # Construct observation
+        obs = dict(
+            # is_grasped=info["is_grasped"],
+            tcp_pose=self.agent.tcp.pose.raw_pose,
+            goal_pos=self.goal_site.pose.p,
+            cubes=cubes, 
+        )
+
+        return obs
 
     def compute_dense_reward(self, obs: Any, action: torch.Tensor, info: Dict):
         # We also create a pose marking where the robot should push the cube from that is easiest (pushing from behind the cube)

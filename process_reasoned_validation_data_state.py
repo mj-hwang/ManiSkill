@@ -1,15 +1,15 @@
 import h5py
 import numpy as np
-import random
 import torch
+import random
 from transformers import AutoTokenizer, T5Config, T5EncoderModel
 
 # NOTE: Trajectory A referes to preferred trajectory.
 TASKS = [
-    "pick_larger", "pick_larger_swapped",
+    # "pick_larger", "pick_larger_swapped",
     "push_larger", "push_larger_swapped",
     # "place_larger", "place_larger_swapped",
-    # "pull_larger", "pull_larger_swapped",
+    "pull_larger", "pull_larger_swapped",
     # "pick_smaller", "pick_smaller_swapped", 
     # "push_smaller", "push_smaller_swapped",
 ]
@@ -18,38 +18,45 @@ NUM_TRAJ_PER_TASK = 50
 
 DATA_PATHS = {
     "pick_larger": {
-        "A": "./demos/PickLargerCube-v1/motionplanning/pick_larger_validation_100.rgb.pd_ee_delta_pose.physx_cpu.h5",
-        "B": "./demos/PickSmallerCube-v1/motionplanning/pick_smaller_validation_100.rgb.pd_ee_delta_pose.physx_cpu.h5",
+        "A": "./demos/PickLargerCube-v1/motionplanning/pick_larger_validation_100_state.state.pd_ee_delta_pose.physx_cpu.h5",
+        "B": "./demos/PickSmallerCube-v1/motionplanning/pick_smaller_validation_100_state.state.pd_ee_delta_pose.physx_cpu.h5",
     },
     "pick_larger_swapped": {
-        "A": "./demos/PickLargerCubeSwapped-v1/motionplanning/pick_larger_validation_100.rgb.pd_ee_delta_pose.physx_cpu.h5",
-        "B": "./demos/PickSmallerCubeSwapped-v1/motionplanning/pick_smaller_validation_100.rgb.pd_ee_delta_pose.physx_cpu.h5",
+        "A": "./demos/PickLargerCubeSwapped-v1/motionplanning/pick_larger_validation_100_state.state.pd_ee_delta_pose.physx_cpu.h5",
+        "B": "./demos/PickSmallerCubeSwapped-v1/motionplanning/pick_smaller_validation_100_state.state.pd_ee_delta_pose.physx_cpu.h5",
     },
     "push_larger": {
-        "A": "./demos/PushLargerCube-v1/motionplanning/push_larger_validation_100.rgb.pd_ee_delta_pose.physx_cpu.h5",
-        "B": "./demos/PushSmallerCube-v1/motionplanning/push_smaller_validation_100.rgb.pd_ee_delta_pose.physx_cpu.h5",
+        "A": "./demos/PushLargerCube-v1/motionplanning/push_larger_validation_100_state.state.pd_ee_delta_pose.physx_cpu.h5",
+        "B": "./demos/PushSmallerCube-v1/motionplanning/push_smaller_validation_100_state.state.pd_ee_delta_pose.physx_cpu.h5",
     }, 
     "push_larger_swapped": {
-        "A": "./demos/PushLargerCubeSwapped-v1/motionplanning/push_larger_validation_100.rgb.pd_ee_delta_pose.physx_cpu.h5",
-        "B": "./demos/PushSmallerCubeSwapped-v1/motionplanning/push_smaller_validation_100.rgb.pd_ee_delta_pose.physx_cpu.h5",
+        "A": "./demos/PushLargerCubeSwapped-v1/motionplanning/push_larger_validation_100_state.state.pd_ee_delta_pose.physx_cpu.h5",
+        "B": "./demos/PushSmallerCubeSwapped-v1/motionplanning/push_smaller_validation_100_state.state.pd_ee_delta_pose.physx_cpu.h5",
     },
     "place_larger": {
-        "A": "./demos/PlaceLargerCube-v1/motionplanning/place_larger_validation_100.rgb.pd_ee_delta_pose.physx_cpu.h5",
-        "B": "./demos/PlaceSmallerCube-v1/motionplanning/place_smaller_validation_100.rgb.pd_ee_delta_pose.physx_cpu.h5",
+        "A": "./demos/PlaceLargerCube-v1/motionplanning/place_larger_validation_100_state.state.pd_ee_delta_pose.physx_cpu.h5",
+        "B": "./demos/PlaceSmallerCube-v1/motionplanning/place_smaller_validation_100_state.state.pd_ee_delta_pose.physx_cpu.h5",
     }, 
     "place_larger_swapped": {
-        "A": "./demos/PlaceLargerCubeSwapped-v1/motionplanning/place_larger_validation_100.rgb.pd_ee_delta_pose.physx_cpu.h5",
-        "B": "./demos/PlaceSmallerCubeSwapped-v1/motionplanning/place_smaller_validation_100.rgb.pd_ee_delta_pose.physx_cpu.h5",
+        "A": "./demos/PlaceLargerCubeSwapped-v1/motionplanning/place_larger_validation_100_state.state.pd_ee_delta_pose.physx_cpu.h5",
+        "B": "./demos/PlaceSmallerCubeSwapped-v1/motionplanning/place_smaller_validation_100_state.state.pd_ee_delta_pose.physx_cpu.h5",
     },
     "pull_larger": {
-        "A": "./demos/PullLargerCube-v1/motionplanning/pull_larger_validation_100.rgb.pd_ee_delta_pose.physx_cpu.h5",
-        "B": "./demos/PullSmallerCube-v1/motionplanning/pull_smaller_validation_100.rgb.pd_ee_delta_pose.physx_cpu.h5",
+        "A": "./demos/PullLargerCube-v1/motionplanning/pull_larger_validation_100_state.state.pd_ee_delta_pose.physx_cpu.h5",
+        "B": "./demos/PullSmallerCube-v1/motionplanning/pull_smaller_validation_100_state.state.pd_ee_delta_pose.physx_cpu.h5",
     }, 
     "pull_larger_swapped": {
-        "A": "./demos/PullLargerCubeSwapped-v1/motionplanning/pull_larger_validation_100.rgb.pd_ee_delta_pose.physx_cpu.h5",
-        "B": "./demos/PullSmallerCubeSwapped-v1/motionplanning/pull_smaller_validation_100.rgb.pd_ee_delta_pose.physx_cpu.h5",
+        "A": "./demos/PullLargerCubeSwapped-v1/motionplanning/pull_larger_validation_100_state.state.pd_ee_delta_pose.physx_cpu.h5",
+        "B": "./demos/PullSmallerCubeSwapped-v1/motionplanning/pull_smaller_validation_100_state.state.pd_ee_delta_pose.physx_cpu.h5",
     },
 }
+
+# TASK_NLS = {
+#     "pick_larger": "pick up larger cube to green sphere",
+#     "push_larger": "push larger cube toward green line",
+#     "place_larger": "place larger cube in green bin",
+#     "pull_larger": "pull larger cube toward green line",
+# }
 
 TASK_NLS = {
     "pick_larger": "pick up larger cube to green sphere",
@@ -62,6 +69,17 @@ TASK_NLS = {
     "pull_larger_swapped": "pull larger cube toward green line",
 }
 
+def set_seed(seed_value):
+    """Sets a global seed for reproducibility across all libraries."""
+    random.seed(seed_value)
+    np.random.seed(seed_value)
+    torch.manual_seed(seed_value)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed_value)
+    
+    # These lines are crucial for CUDA operations to be deterministic.
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 # IMPORTANT: followings are task labels
 # 1: pick_larger
@@ -77,6 +95,7 @@ TRAJ_LEN = 64
 LANG_MODEL_NAME = "google-t5/t5-small"
 
 def main():
+    set_seed(42)
     print("###### PHASE 1: processing trajectory data ######")
     obs_1 = []
     actions_1 = []
@@ -94,16 +113,12 @@ def main():
             print(i)
             traj_len_1 = len(f1[keys_1[i]]["actions"])
             start_idx_1 = random.randint(0, traj_len_1 - TRAJ_LEN)
-            ob1 = f1[keys_1[i]]["obs"]["sensor_data"]["base_camera"]["rgb"][start_idx_1:start_idx_1 + TRAJ_LEN]
-            ob1 = np.transpose(ob1, (0, 3, 1, 2))
-            obs_1.append(ob1)
+            obs_1.append(f1[keys_1[i]]["obs"][start_idx_1:start_idx_1 + TRAJ_LEN])
             actions_1.append(f1[keys_1[i]]["actions"][start_idx_1:start_idx_1 + TRAJ_LEN])
 
             traj_len_2 = len(f2[keys_2[i]]["actions"])
             start_idx_2 = random.randint(0, traj_len_2 - TRAJ_LEN)
-            ob2 = f2[keys_2[i]]["obs"]["sensor_data"]["base_camera"]["rgb"][start_idx_2:start_idx_2 + TRAJ_LEN]
-            ob2 = np.transpose(ob2, (0, 3, 1, 2))
-            obs_2.append(ob2)
+            obs_2.append(f2[keys_2[i]]["obs"][start_idx_2:start_idx_2 + TRAJ_LEN])
             actions_2.append(f2[keys_2[i]]["actions"][start_idx_2:start_idx_2 + TRAJ_LEN])
         
         f1.close()
@@ -124,15 +139,14 @@ def main():
     labels = np.zeros(len(obs_1))
 
     print("labels shape:", labels.shape)
-
     print("###### PHASE 2: processing language (reason & task) data ######")
     tokenizer = AutoTokenizer.from_pretrained(LANG_MODEL_NAME)
-    t5_config = T5Config.from_pretrained(LANG_MODEL_NAME)
-    t5_config.dropout_rate = 0.0
-    lang_encoder = T5EncoderModel(t5_config)
+    lang_encoder = T5EncoderModel.from_pretrained(LANG_MODEL_NAME)
+    lang_encoder.config.dropout_rate = 0.0
+    lang_encoder.eval()
+
     for param in lang_encoder.parameters():
         param.requires_grad = False
-    lang_encoder.eval()
 
     tokenized_tasks = tokenizer(
         [TASK_NLS[task] for task in TASKS],
@@ -156,14 +170,13 @@ def main():
 
     print("###### PHASE 3: saving data ######")
     np.savez_compressed(
-        f"data_all_valid_{NUM_TRAJ_PER_TASK * len(TASKS)}_updated.npz", 
+        f"data_all_valid_{NUM_TRAJ_PER_TASK * len(TASKS)}_state.npz", 
         obs_1=obs_1, 
         action_1=actions_1, 
         obs_2=obs_2, 
         action_2=actions_2, 
         label=labels,
-        task_tokens=task_tokens,
-        task_masks=task_masks,
+        task_embeddings=task_embeddings,
         task_labels=task_labels,
     )
 
